@@ -48,14 +48,21 @@ private  void Start()
  async void ConnectOnStart(string playerName)
 {
     _playerName = playerName;
-    if (_networkRunner == null)
-    {
-        _networkRunner = gameObject.AddComponent<NetworkRunner>();
-    }
+    CheckRunner();
 
    await _networkRunner.JoinSessionLobby(SessionLobby.Shared);
    LobbyUIManager.Instance.OpenMenu(0);
 }
+
+ void CheckRunner()
+ {
+     if (_networkRunner == null)
+     {
+         var newObj =new GameObject("RunnerObject");
+         _networkRunner = newObj.AddComponent<NetworkRunner>();
+         _networkRunner.AddCallbacks(this);
+     }
+ }
 #endregion
 
 #region Public Methods
@@ -66,7 +73,6 @@ public void RefreshSessionListUI()
     {
         Destroy(child.gameObject);
     }
-
     foreach (SessionInfo sessionInfo in _sessionList)
     {
         if (sessionInfo.IsVisible)
@@ -89,10 +95,7 @@ public void RefreshSessionListUI()
 }
 public async void CreateSession()
 {
-    if (_networkRunner == null)
-    {
-        _networkRunner = gameObject.AddComponent<NetworkRunner>();
-    }
+    CheckRunner();
     var startGameArgs = new StartGameArgs()
     {
         GameMode = GameMode.Shared, // Sunucu olarak lobi oluştur
@@ -116,10 +119,7 @@ public async void CreateSession()
 // Lobiye girme (katılma)
 public async void JoinSession(string sessionName)
 {
-    if (_networkRunner == null)
-    {
-        _networkRunner = gameObject.AddComponent<NetworkRunner>();
-    }
+    CheckRunner();
     var startGameArgs = new StartGameArgs()
     {
         GameMode = GameMode.Shared, // Müşteri olarak lobiye katıl
@@ -143,6 +143,7 @@ public async void JoinSession(string sessionName)
 // Hızlı giriş (quick join)
 public async void QuickJoin()
 {
+    CheckRunner();
     var startGameArgs = new StartGameArgs()
     {
         GameMode = GameMode.Client, // Hızlı giriş yapacak
@@ -159,6 +160,28 @@ public async void QuickJoin()
     else
     {
         Debug.LogError($"Hızlı giriş başarısız: {result.ShutdownReason}");
+    }
+}
+public async void LeaveSession()
+{
+    if (_networkRunner != null)
+    {
+        LobbyUIManager.Instance.SetMenuTransitionText("Leaving Session...");
+        
+        // NetworkRunner'ı durdurun
+        await _networkRunner.Shutdown();
+        
+        CheckRunner();
+
+        await _networkRunner.JoinSessionLobby(SessionLobby.Shared);
+        // Kullanıcı arayüzünü lobiye geri döndür
+        LobbyUIManager.Instance.OpenMenu(0);
+        
+        Debug.Log("Oturumdan ayrıldınız.");
+    }
+    else
+    {
+        Debug.LogWarning("Ayrılacak bir oturum yok.");
     }
 }
 #endregion
@@ -236,6 +259,7 @@ public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> session
 {
     _sessionList.Clear();
     _sessionList = sessionList;
+    print(_sessionList.Count);
     foreach (SessionInfo entry in _sessionList)
     {
         RefreshSessionListUI();
