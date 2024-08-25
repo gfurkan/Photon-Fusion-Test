@@ -99,6 +99,7 @@ public async void CreateSession()
         SessionName = LobbyUIManager.Instance.SessionName,
         PlayerCount = LobbyUIManager.Instance.MaxPlayerCount,// Lobi oturum adı
     };
+    LobbyUIManager.Instance.SetMenuTransitionText("Creating Session...");
     var result = await _networkRunner.StartGame(startGameArgs);
 
     if (result.Ok)
@@ -125,7 +126,7 @@ public async void JoinSession(string sessionName)
         SessionName = sessionName, // Katılmak istenen lobi oturum adı
         PlayerCount = 2
     };
-
+    LobbyUIManager.Instance.SetMenuTransitionText("Joining Session...");
     var result = await _networkRunner.StartGame(startGameArgs);
 
     if (result.Ok)
@@ -148,7 +149,7 @@ public async void QuickJoin()
         SessionName = "", // Oturum adı belirtmeyin
         SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>()
     };
-
+    LobbyUIManager.Instance.SetMenuTransitionText("Joining a Random Session...");
     var result = await _networkRunner.StartGame(startGameArgs);
 
     if (result.Ok)

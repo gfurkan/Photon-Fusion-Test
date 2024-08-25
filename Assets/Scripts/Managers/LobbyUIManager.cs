@@ -58,6 +58,10 @@ public void OpenMenu(int newMenu)
 
 public void SetMenuTransitionText(string text)
 {
+    if (_currentMenu != null)
+    {
+        _currentMenu.SetActive(false);
+    }
     _menuTransitionText.gameObject.SetActive(true);
     _menuTransitionText.text = text;
 }
