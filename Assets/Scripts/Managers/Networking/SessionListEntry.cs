@@ -2,53 +2,18 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-
-namespace Networking
-{
 public class SessionListEntry : MonoBehaviour
 {
-#region Fields
+    [SerializeField] private TMP_Text sessionNameText;
+    [SerializeField] private TMP_Text playerCountText;
+    [SerializeField] private Button joinButton;
 
-[SerializeField] private TextMeshProUGUI _sessionName, _playerCount;
-[SerializeField] private Button _button;
+    public void Setup(string sessionName, int currentPlayers, int maxPlayers, System.Action onJoinClicked)
+    {
+        sessionNameText.text = sessionName;
+        playerCountText.text = $"{currentPlayers}/{maxPlayers}";
 
-#endregion
-
-#region Properties
-
-public TextMeshProUGUI SessionName => _sessionName;
-public TextMeshProUGUI PlayerCount => _playerCount;
-public Button Button => _button;
-
-public int MaxPlayerCount { get; set; }
-
-#endregion
-
-#region Unity Methods
-
-void Start()
-{
-    
+        joinButton.onClick.RemoveAllListeners();
+        joinButton.onClick.AddListener(() => onJoinClicked.Invoke());
+    }
 }
-void Update()
-{
-   
-}
-
-#endregion
-
-#region Private Methods
-
-#endregion
-
-#region PublicMethods
-
-public void JoinSession()
-{
-    LobbyManager.Instance.JoinSession(_sessionName.text);
-
-}
-#endregion
-}
-}
-

@@ -203,13 +203,13 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 1738290422}
-        m_TargetAssemblyTypeName: Networking.LobbyManager, Assembly-CSharp
+        m_TargetAssemblyTypeName: FusionLobbyManager, Assembly-CSharp
         m_MethodName: QuickJoin
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
           m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 1
+          m_IntArgument: 0
           m_FloatArgument: 0
           m_StringArgument: 
           m_BoolArgument: 0
@@ -964,8 +964,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 1738290422}
-        m_TargetAssemblyTypeName: Networking.LobbyManager, Assembly-CSharp
-        m_MethodName: CreateSession
+        m_TargetAssemblyTypeName: FusionLobbyManager, Assembly-CSharp
+        m_MethodName: HostSession
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -3361,8 +3361,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 1738290422}
-        m_TargetAssemblyTypeName: Networking.LobbyManager, Assembly-CSharp
-        m_MethodName: LeaveSession
+        m_TargetAssemblyTypeName: FusionLobbyManager, Assembly-CSharp
+        m_MethodName: QuitJoin
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -4378,8 +4378,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a03d0f29cb0af4c44881683291e5fc3f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _sessionEntryPrefab: {fileID: 5153185803982544805, guid: d7366bfad04b55f49b2d23e2cd8a1471, type: 3}
-  _sessionListContent: {fileID: 511731949}
+  runnerPrefab: {fileID: 2419846798103487689, guid: edbc47babbcd9be4d915a9b4c2db1f5a, type: 3}
+  gameManagerPrefab: {fileID: 3340091403578897780, guid: 3456c609b7494d647bba861f52bbfd9d, type: 3}
+  sessionEntryPrefab: {fileID: 5153185803982544805, guid: d7366bfad04b55f49b2d23e2cd8a1471, type: 3}
+  sessionListParent: {fileID: 511731949}
 --- !u!1 &1795070124
 GameObject:
   m_ObjectHideFlags: 0

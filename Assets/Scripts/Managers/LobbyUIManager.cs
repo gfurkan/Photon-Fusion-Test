@@ -1,3 +1,4 @@
+using System;
 using Managers;
 using TMPro;
 using UnityEngine;
@@ -5,7 +6,7 @@ using UnityEngine;
 
 namespace Networking
 {
-public class LobbyUIManager : SingletonManager<LobbyUIManager>
+public class LobbyUIManager : MonoBehaviour
 {
 #region Fields
 
@@ -14,6 +15,7 @@ public class LobbyUIManager : SingletonManager<LobbyUIManager>
 [SerializeField] private TMP_InputField _sessionCreateName;
 [SerializeField] private TMP_InputField _sessionCreateMaxPlayerCount;
 
+public static LobbyUIManager Instance;
 private GameObject _currentMenu;
 
 #endregion
@@ -26,6 +28,11 @@ public int MaxPlayerCount => (int.Parse(_sessionCreateMaxPlayerCount.text));
 #endregion
 
 #region Unity Methods
+
+private void Awake()
+{
+    Instance = this;
+}
 
 void Start()
 {

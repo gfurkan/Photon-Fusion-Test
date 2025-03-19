@@ -258,19 +258,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 5459411502888499561}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 903846691493673423}
-        m_TargetAssemblyTypeName: Networking.SessionListEntry, Assembly-CSharp
-        m_MethodName: JoinSession
-        m_Mode: 1
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
 --- !u!114 &903846691493673423
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -283,9 +271,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5feb78444b5f691438c95de523e1f4c2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _sessionName: {fileID: 1355137977893490392}
-  _playerCount: {fileID: 1137174775001164834}
-  _button: {fileID: 662557131371713603}
+  sessionNameText: {fileID: 1355137977893490392}
+  playerCountText: {fileID: 1137174775001164834}
+  joinButton: {fileID: 662557131371713603}
 --- !u!1 &8597987108843052829
 GameObject:
   m_ObjectHideFlags: 0

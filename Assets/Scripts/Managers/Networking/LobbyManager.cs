@@ -1,300 +1,211 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Fusion;
 using Fusion.Sockets;
+using Networking;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
-
-namespace Networking
+public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 {
-public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
-{
-#region Fields
+    [SerializeField] private NetworkRunner runnerPrefab;
+    [SerializeField] private NetworkObject gameManagerPrefab;
+    [SerializeField] private GameObject sessionEntryPrefab;
+    [SerializeField] private Transform sessionListParent;
 
-public static LobbyManager _instance;
+    private NetworkRunner runner;
+    private List<SessionInfo> sessionList = new List<SessionInfo>();
 
-[SerializeField] private GameObject _sessionEntryPrefab;
-[SerializeField] private Transform _sessionListContent;
-
-private List<SessionInfo> _sessionList = new List<SessionInfo>();
-private NetworkRunner _networkRunner;
-private string _playerName;
-
-#endregion
-
-#region Properties
-
-public static LobbyManager Instance => _instance;
-public NetworkRunner NetworkRunner => _networkRunner;
-
-#endregion
-
-#region Unity Methods
-
-private void Awake()
-{
-    _instance = this;
-}
-
-private  void Start()
-{
-    ConnectOnStart("Player1");
-}
-
-#endregion
-
-#region Private Methods
-
- async void ConnectOnStart(string playerName)
-{
-    _playerName = playerName;
-    CheckRunner();
-
-   await _networkRunner.JoinSessionLobby(SessionLobby.Shared);
-   LobbyUIManager.Instance.OpenMenu(0);
-}
-
- void CheckRunner()
- {
-     if (_networkRunner == null)
-     {
-         var newObj =new GameObject("RunnerObject");
-         _networkRunner = newObj.AddComponent<NetworkRunner>();
-         _networkRunner.AddCallbacks(this);
-     }
- }
-#endregion
-
-#region Public Methods
-
-public void RefreshSessionListUI()
-{
-    foreach (Transform child in _sessionListContent)
+    private void Start()
     {
-        Destroy(child.gameObject);
+        CreateRunner();
+        JoinLobby();
     }
-    foreach (SessionInfo sessionInfo in _sessionList)
-    {
-        if (sessionInfo.IsVisible)
-        {
-            GameObject entry = GameObject.Instantiate(_sessionEntryPrefab, _sessionListContent);
-            SessionListEntry sessionListEntry = entry.GetComponent<SessionListEntry>();
-            sessionListEntry.SessionName.text = sessionInfo.Name;
-            sessionListEntry.PlayerCount.text = $"{sessionInfo.PlayerCount}/{sessionInfo.MaxPlayers}";
 
-            if (sessionInfo.IsOpen == false || sessionInfo.PlayerCount >= sessionInfo.MaxPlayers)
+    private void CreateRunner()
+    {
+            print("----------------  created runner");
+        if (runner == null)
+        {
+            runner = Instantiate(runnerPrefab);
+            runner.ProvideInput = true;
+            runner.AddCallbacks(this);
+            print("++++++++++++++++++++  created runner");
+        }
+    }
+
+    private async void JoinLobby()
+    {
+        await runner.JoinSessionLobby(SessionLobby.Shared);
+        LobbyUIManager.Instance.OpenMenu(0);
+    }
+
+    public async void HostSession()
+    {
+        var result = await runner.StartGame(new StartGameArgs
+        {
+            GameMode = GameMode.Host,
+            SessionName = LobbyUIManager.Instance.SessionName,
+            Scene = SceneRef.FromIndex(1),
+            PlayerCount = LobbyUIManager.Instance.MaxPlayerCount,
+            SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>()
+        });
+
+        if (result.Ok)
+        {
+            Debug.Log("Session hosted: " + LobbyUIManager.Instance.SessionName);
+            LobbyUIManager.Instance.OpenMenu(3);
+        }
+        else
+        {
+            Debug.LogError("Host failed: " + result.ShutdownReason);
+        }
+    }
+
+    public async void JoinSession(string sessionName)
+    {
+        var result = await runner.StartGame(new StartGameArgs
+        {
+            GameMode = GameMode.Client,
+            SessionName = sessionName,
+            Scene = SceneRef.FromIndex(SceneManager.GetActiveScene().buildIndex),
+            SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>()
+        });
+
+        if (result.Ok)
+        {
+            LobbyUIManager.Instance.OpenMenu(3);
+            Debug.Log("Joined session: " + sessionName);
+        }
+        else
+        {
+            Debug.LogError("Join failed: " + result.ShutdownReason);
+        }
+    }
+
+    public async void QuickJoin()
+    {
+        // Oyun lobi listesine ulaşın
+        if (sessionList.Count > 0)
+        {
+            // Mevcut oturumlardan birine rastgele katıl
+            var randomSession = sessionList[UnityEngine.Random.Range(0, sessionList.Count)];
+            JoinSession(randomSession.Name);
+            Debug.Log("Quick joined session: " + randomSession.Name);
+        }
+        else
+        {
+            Debug.LogWarning("No available sessions to join.");
+        }
+    }
+
+    public async void QuitJoin()
+    {
+        // Oturumdan çıkın ve lobiye geri dönün
+        if (runner != null)
+        {
+            await runner.Shutdown();
+            runner = null;
+            CreateRunner();
+            LobbyUIManager.Instance.SetMenuTransitionText("Leaving Session...");
+            Debug.Log("Leaving session...");
+            JoinLobby(); // Lobiye geri dön
+        }
+    }
+
+    public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> updatedList)
+    {
+        sessionList = updatedList;
+
+        foreach (Transform child in sessionListParent)
+            Destroy(child.gameObject);
+
+        foreach (var session in sessionList)
+        {
+            if (session.IsVisible && session.IsOpen)
             {
-                sessionListEntry.Button.interactable = false;
-            }
-            else
-            {
-                sessionListEntry.Button.interactable = true;
+                var entry = Instantiate(sessionEntryPrefab, sessionListParent);
+                entry.GetComponent<SessionListEntry>().Setup(session.Name, session.PlayerCount, session.MaxPlayers, () => JoinSession(session.Name));
             }
         }
     }
-}
-public async void CreateSession()
-{
-    CheckRunner();
-    var startGameArgs = new StartGameArgs()
+    void HostMigrationResume(NetworkRunner runner)
     {
-        GameMode = GameMode.Shared, // Sunucu olarak lobi oluştur
-        SessionName = LobbyUIManager.Instance.SessionName,
-        PlayerCount = LobbyUIManager.Instance.MaxPlayerCount,// Lobi oturum adı
-    };
-    LobbyUIManager.Instance.SetMenuTransitionText("Creating Session...");
-    var result = await _networkRunner.StartGame(startGameArgs);
+        // On host migration, we resume the session by restoring NetworkObject state
+        foreach (var resumeNO in runner.GetResumeSnapshotNetworkObjects())
+        {
+            if (resumeNO.TryGetBehaviour<NetworkTransform>(out var posRot))
+            {
+                runner.Spawn(resumeNO, onBeforeSpawned: (runner, newNO) =>
+                {
+                    // Copy state from the old NetworkObject to the new one
+                    newNO.CopyStateFrom(resumeNO);
 
-    if (result.Ok)
-    {
-        Debug.Log("Lobi başarıyla oluşturuldu!");
-        LobbyUIManager.Instance.OpenMenu(3);
+                    // Optionally, copy partial state (e.g., custom NetworkBehaviour)
+                    if (resumeNO.TryGetBehaviour<NetworkBehaviour>(out var customBehaviour))
+                    {
+                        newNO.GetComponent<NetworkBehaviour>().CopyStateFrom(customBehaviour);
+                    }
+                });
+            }
+        }
     }
-    else
+    // --- Empty INetworkRunnerCallbacks ---
+    public void OnConnectedToServer(NetworkRunner runner) { }
+    public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason) { }
+    public void OnDisconnectedFromServer(NetworkRunner runner) { }
+    public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+    public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
+    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { print("Player joined"); }
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player) { }
+    public void OnInput(NetworkRunner runner, NetworkInput input) { }
+    public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
+    public void OnShutdown(NetworkRunner runner, ShutdownReason reason) 
     {
-        Debug.LogError($"Lobi oluşturulamadı: {result.ShutdownReason}");
+        if (reason == ShutdownReason.HostMigration)
+        {
+            // Handle the case where the shutdown reason is host migration
+            Debug.Log("Shutdown due to Host Migration.");
+        }
+        else
+        {
+            Debug.Log("Shutdown due to unknown reason.");
+        }
     }
-}
-
-// Lobiye girme (katılma)
-public async void JoinSession(string sessionName)
-{
-    CheckRunner();
-    var startGameArgs = new StartGameArgs()
+    public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token) { }
+    public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason) { }
+    public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message) { }
+    public void OnSceneLoadDone(NetworkRunner runner) { }
+    public void OnSceneLoadStart(NetworkRunner runner) { }
+    public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data) { }
+    public async void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken)
     {
-        GameMode = GameMode.Shared, // Müşteri olarak lobiye katıl
-        SessionName = sessionName, // Katılmak istenen lobi oturum adı
-        PlayerCount = 2
-    };
-    LobbyUIManager.Instance.SetMenuTransitionText("Joining Session...");
-    var result = await _networkRunner.StartGame(startGameArgs);
+        // Shutdown the old runner, as host is migrating
+        await runner.Shutdown(shutdownReason: ShutdownReason.HostMigration);
+        var newRunner = Instantiate(runnerPrefab);
+        this.runner = newRunner;
+        print("Runner created +++++++++++++++++++++++++++");
 
-    if (result.Ok)
-    {
-        Debug.Log("Lobiye başarıyla katıldınız!");
-        LobbyUIManager.Instance.OpenMenu(3);
+        // Start the new Runner using the HostMigrationToken and pass the callback to resume the session
+        StartGameResult result = await newRunner.StartGame(new StartGameArgs()
+        {
+            HostMigrationToken = hostMigrationToken,  // This is necessary to resume the session
+            HostMigrationResume = HostMigrationResume, // This callback will be used to resume the session
+            // Other args like session settings can go here
+        });
+
+        // Check if the new runner successfully started
+        if (result.Ok)
+        {
+            Debug.Log("Host migration succeeded, new host started successfully.");
+        }
+        else
+        {
+            Debug.LogWarning("Host migration failed: " + result.ShutdownReason);
+        }
     }
-    else
-    {
-        Debug.LogError($"Lobiye katılım başarısız: {result.ShutdownReason}");
-    }
+
+    public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data) { }
+    public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress) { }
 }
-
-// Hızlı giriş (quick join)
-public async void QuickJoin()
-{
-    CheckRunner();
-    var startGameArgs = new StartGameArgs()
-    {
-        GameMode = GameMode.Client, // Hızlı giriş yapacak
-        SessionName = "", // Oturum adı belirtmeyin
-        SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>()
-    };
-    LobbyUIManager.Instance.SetMenuTransitionText("Joining a Random Session...");
-    var result = await _networkRunner.StartGame(startGameArgs);
-
-    if (result.Ok)
-    {
-        Debug.Log("Hızlı giriş başarılı!");
-    }
-    else
-    {
-        Debug.LogError($"Hızlı giriş başarısız: {result.ShutdownReason}");
-    }
-}
-public async void LeaveSession()
-{
-    if (_networkRunner != null)
-    {
-        LobbyUIManager.Instance.SetMenuTransitionText("Leaving Session...");
-        
-        // NetworkRunner'ı durdurun
-        await _networkRunner.Shutdown();
-        
-        CheckRunner();
-
-        await _networkRunner.JoinSessionLobby(SessionLobby.Shared);
-        // Kullanıcı arayüzünü lobiye geri döndür
-        LobbyUIManager.Instance.OpenMenu(0);
-        
-        Debug.Log("Oturumdan ayrıldınız.");
-    }
-    else
-    {
-        Debug.LogWarning("Ayrılacak bir oturum yok.");
-    }
-}
-#endregion
-public void OnConnectedToServer(NetworkRunner runner)
-{
-    Debug.Log("Ağa başarıyla bağlanıldı!");
-
-}
-
-// Bağlantı kesildiğinde çağrılır
-public void OnDisconnectedFromServer(NetworkRunner runner)
-{
-    Debug.Log("Ağ bağlantısı kesildi.");
-}
-
-// Diğer oyuncular bağlandığında çağrılır
-public void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
-{
-    Debug.Log("Player başarıyla bağlanıldı!");
-
-}
-
-public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player)
-{
-    
-}
-
-public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player)
-{
- 
-}
-
-public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
-{
-   
-}
-
-public void OnInput(NetworkRunner runner, NetworkInput input)
-{
-
-}
-
-public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input)
-{
-
-}
-
-public void OnShutdown(NetworkRunner runner, ShutdownReason shutdownReason)
-{
-
-}
-
-
-public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason)
-{
-
-}
-
-public void OnConnectRequest(NetworkRunner runner, NetworkRunnerCallbackArgs.ConnectRequest request, byte[] token)
-{
-
-}
-
-public void OnConnectFailed(NetworkRunner runner, NetAddress remoteAddress, NetConnectFailedReason reason)
-{
-
-}
-
-public void OnUserSimulationMessage(NetworkRunner runner, SimulationMessagePtr message)
-{
-
-}
-
-public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> sessionList)
-{
-    _sessionList.Clear();
-    _sessionList = sessionList;
-    print(_sessionList.Count);
-    foreach (SessionInfo entry in _sessionList)
-    {
-        RefreshSessionListUI();
-    }
-}
-
-public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data)
-{
-
-}
-
-public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken)
-{
-
-}
-
-public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data)
-{
-
-}
-
-public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress)
-{
-
-}
-
-public void OnSceneLoadDone(NetworkRunner runner)
-{
-
-}
-
-public void OnSceneLoadStart(NetworkRunner runner)
-{
-
-}
-}
-}
-
