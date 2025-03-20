@@ -1,43 +1,161 @@
-using System.Linq;
-using UnityEngine;
+using System;
 using Fusion;
+using UnityEditor.VersionControl;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using Task = System.Threading.Tasks.Task;
+
+public struct PlayerInfo: INetworkStruct
+{
+    [Networked] public NetworkString<_16> PlayerName { get; set; }
+    [Networked] public bool IsReady { get; set; }
+}
 
 public class GameManager : NetworkBehaviour
 {
-    [SerializeField] private NetworkPrefabRef playerPrefab;   // Oyuncu prefab'ını buraya at
-    [SerializeField] private NetworkPrefabRef ballPrefab;     // Top prefab'ını buraya at (istersen)
+    #region Fields
+
+    [Networked]  
+    public NetworkDictionary<PlayerRef, PlayerInfo> PlayerInfos => default;
+    public static event Action<PlayerRef, PlayerInfo> OnPlayerInfoChanged;
+    public static event Action<PlayerRef, PlayerInfo> OnPlayerInfoAdded;
+
+    #endregion
+
+    #region Properties
+    
+    public static GameManager Instance { get; private set; }
+
+    #endregion
+
+
+    #region Unity Methods
+
+    private void Awake()
+    {
+        if (Instance == null)
+            Instance = this;
+    }
+
+    #endregion
+
+
+    #region Private Methods
+
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void RPC_RequestAddPlayerInfo(string PlayerName, RpcInfo info = default)
+    {
+        AddPlayerInfo(info.Source, PlayerName);
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void RPC_NotifyPlayerAdded(PlayerRef player, PlayerInfo playerInfo)
+    {
+        OnPlayerInfoAdded?.Invoke(player,playerInfo);
+    }
+ 
+    
+    [Rpc(RpcSources.All, RpcTargets.StateAuthority)]
+    private void Rpc_RequestChangeReadyState(bool isReady, RpcInfo info = default)
+    {
+        ChangePlayerReadyState(info.Source, isReady);
+    }
+
+    [Rpc(RpcSources.StateAuthority, RpcTargets.All)]
+    private void Rpc_PlayerInfoChanged(PlayerRef player, PlayerInfo playerInfo)
+    {
+        OnPlayerInfoChanged?.Invoke(player, playerInfo);
+        if (Runner.IsServer)
+        {
+            CheckAllPlayersReady();
+        }
+    }
+
+    private void CheckAllPlayersReady()
+    {
+        if (!Runner.IsServer) return;
+
+        foreach (var playerInfo in PlayerInfos)
+        {
+            if (!playerInfo.Value.IsReady)
+                return;
+        }
+        
+        StartGame();
+    }
+
+    private async void StartGame()
+    {
+        Debug.Log("Tüm oyuncular hazır, yeni sahne yükleniyor...");
+        await Task.Delay(500);
+        await Runner.LoadScene(SceneRef.FromIndex(2), LoadSceneMode.Single);
+    }
+    #endregion
+    
+    #region Public Methods
+    
+    public void AddPlayerInfo(PlayerRef player, string PlayerName)
+    {
+        if (Runner.IsServer)
+        {
+            if (!PlayerInfos.ContainsKey(player))
+            {
+                var playerInfo = new PlayerInfo
+                {
+                    PlayerName = PlayerName,
+                    IsReady = false
+                };
+                PlayerInfos.Add(player, playerInfo);
+                RPC_NotifyPlayerAdded(player,playerInfo);
+            }
+        }
+        else
+        {
+            RPC_RequestAddPlayerInfo(PlayerName);
+        }
+    }
+    
+    public void ChangePlayerReadyState(PlayerRef player, bool isReady)
+    {
+        if (Runner.IsServer)
+        {
+            if (PlayerInfos.TryGet(player, out var playerInfo))
+            {
+                playerInfo.IsReady = isReady;
+                PlayerInfos.Set(player, playerInfo);
+                Rpc_PlayerInfoChanged(player, playerInfo);
+            }
+        }
+        else
+        {
+            Rpc_RequestChangeReadyState(isReady);
+        }
+    }
+    
+    public void RemovePlayerInfo(PlayerRef player)
+    {
+        if (Runner.IsServer && PlayerInfos.ContainsKey(player))
+        {
+            PlayerInfos.Remove(player);
+        }
+    }
+    
+    
+    #endregion
+
+    #region Override Methods
 
     public override void Spawned()
     {
-        if (Object.HasStateAuthority)
+        base.Spawned();
+        foreach (var info in PlayerInfos)
         {
-         //   Runner.PlayerJoined += OnPlayerJoined;
-            Debug.Log("GameManager aktif, oyuncular bekleniyor...");
+            OnPlayerInfoChanged?.Invoke(info.Key, info.Value);
         }
     }
 
-    private void OnPlayerJoined(NetworkRunner runner, PlayerRef player)
-    {
-        Debug.Log($"Oyuncu katıldı: {player.PlayerId}");
+    #endregion
+    
+    
 
-        // Oyuncuyu rastgele bir konuma spawn et
-        Vector3 spawnPos = new Vector3(Random.Range(-2f, 2f), 1, Random.Range(-2f, 2f));
-        runner.Spawn(playerPrefab, spawnPos, Quaternion.identity, player);
-
-        // Oyuncu katıldığında bir kez top spawn etmek istersen:
-        if (ballPrefab != null && runner.ActivePlayers.Count() == 1) // ilk oyuncu gelince top spawn et
-        {
-            Vector3 ballPos = Vector3.zero + Vector3.up * 1f;
-            runner.Spawn(ballPrefab, ballPos, Quaternion.identity);
-            Debug.Log("Top sahneye spawn edildi!");
-        }
-    }
-
-    public override void Despawned(NetworkRunner runner, bool hasState)
-    {
-        if (Object.HasStateAuthority)
-        {
-            //runner.PlayerJoined -= OnPlayerJoined;
-        }
-    }
 }

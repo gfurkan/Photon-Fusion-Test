@@ -1,8 +1,5 @@
-using System;
-using Managers;
 using TMPro;
 using UnityEngine;
-
 
 namespace Networking
 {
@@ -37,10 +34,6 @@ private void Awake()
 void Start()
 {
     SetMenuTransitionText("Trying to Connect...");
-}
-void Update()
-{
-   
 }
 
 #endregion

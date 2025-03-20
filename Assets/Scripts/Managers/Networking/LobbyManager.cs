@@ -1,49 +1,114 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Fusion;
 using Fusion.Sockets;
 using Networking;
 using UnityEngine;
-using UnityEngine.SceneManagement;
+using Random = UnityEngine.Random;
 
-public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
+public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 {
-    [SerializeField] private NetworkRunner runnerPrefab;
+    #region Fields
+
+    [SerializeField] private NetworkRunner _runnerPrefab;
     [SerializeField] private NetworkObject gameManagerPrefab;
+    
+    [SerializeField] private PlayerListEntry playerListEntryPrefab;
+    [SerializeField] private Transform playerListParent;
+    
     [SerializeField] private GameObject sessionEntryPrefab;
     [SerializeField] private Transform sessionListParent;
 
-    private NetworkRunner runner;
+    private NetworkRunner _runner;
     private List<SessionInfo> sessionList = new List<SessionInfo>();
 
+    #endregion
+
+    #region Unity Methods
+
+    private void OnEnable()
+    {
+        GameManager.OnPlayerInfoAdded += UpdatePlayerList;
+        GameManager.OnPlayerInfoChanged += UpdatePlayerList;
+    }
+
+    private void OnDisable()
+    {
+        GameManager.OnPlayerInfoAdded -= UpdatePlayerList;
+        GameManager.OnPlayerInfoChanged -= UpdatePlayerList;
+    }
     private void Start()
     {
         CreateRunner();
         JoinLobby();
+        
     }
+
+    #endregion
+
+    #region Private Methods
 
     private void CreateRunner()
     {
-            print("----------------  created runner");
-        if (runner == null)
+        if (_runner == null)
         {
-            runner = Instantiate(runnerPrefab);
-            runner.ProvideInput = true;
-            runner.AddCallbacks(this);
-            print("++++++++++++++++++++  created runner");
+            _runner = Instantiate(_runnerPrefab);
+            _runner.ProvideInput = true;
+            _runner.AddCallbacks(this);
         }
     }
 
     private async void JoinLobby()
     {
-        await runner.JoinSessionLobby(SessionLobby.Shared);
+        await _runner.JoinSessionLobby(SessionLobby.Shared);
         LobbyUIManager.Instance.OpenMenu(0);
     }
+    
+    private void UpdatePlayerList(PlayerRef playerRef, PlayerInfo playerInfo)
+    {
+    
+        foreach (Transform child in playerListParent.transform)
+        {
+            Destroy(child.gameObject);
+        }
+        var sortedPlayerInfos = GameManager.Instance.PlayerInfos
+            .OrderBy(p => p.Key.RawEncoded)
+            .ToList();
+    
+        foreach (var data in sortedPlayerInfos)
+        {
+            var entry = Instantiate(playerListEntryPrefab, playerListParent.transform);
+            entry.SetPlayerData(data.Value.IsReady, data.Value.PlayerName.ToString(), data.Key);
+        }
+    }
+    
+    private void HostMigrationResume(NetworkRunner _runner)
+    {
+        foreach (var resumeNO in _runner.GetResumeSnapshotNetworkObjects())
+        {
+            if (resumeNO.TryGetBehaviour<NetworkTransform>(out var posRot))
+            {
+                _runner.Spawn(resumeNO, onBeforeSpawned: (_runner, newNO) =>
+                {
+                    newNO.CopyStateFrom(resumeNO);
+                    
+                    if (resumeNO.TryGetBehaviour<NetworkBehaviour>(out var customBehaviour))
+                    {
+                        newNO.GetComponent<NetworkBehaviour>().CopyStateFrom(customBehaviour);
+                    }
+                });
+            }
+        }
+    }
+    #endregion
+
+    #region Public Methods
 
     public async void HostSession()
     {
-        var result = await runner.StartGame(new StartGameArgs
+        var result = await _runner.StartGame(new StartGameArgs
         {
             GameMode = GameMode.Host,
             SessionName = LobbyUIManager.Instance.SessionName,
@@ -56,6 +121,15 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
         {
             Debug.Log("Session hosted: " + LobbyUIManager.Instance.SessionName);
             LobbyUIManager.Instance.OpenMenu(3);
+            
+            if (_runner.IsServer)
+            {
+                await _runner.SpawnAsync(gameManagerPrefab, Vector3.zero, Quaternion.identity, _runner.LocalPlayer);
+                string randomName = "Player" + Random.Range(0, 999);
+                
+                GameManager.Instance.AddPlayerInfo(_runner.LocalPlayer,randomName);
+                Debug.Log("GameManager spawned by host.");
+            }
         }
         else
         {
@@ -65,11 +139,11 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public async void JoinSession(string sessionName)
     {
-        var result = await runner.StartGame(new StartGameArgs
+        var result = await _runner.StartGame(new StartGameArgs
         {
             GameMode = GameMode.Client,
             SessionName = sessionName,
-            Scene = SceneRef.FromIndex(SceneManager.GetActiveScene().buildIndex),
+            Scene = SceneRef.FromIndex(1),
             SceneManager = gameObject.AddComponent<NetworkSceneManagerDefault>()
         });
 
@@ -77,6 +151,11 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
         {
             LobbyUIManager.Instance.OpenMenu(3);
             Debug.Log("Joined session: " + sessionName);
+            
+            string randomName = "Player" + Random.Range(0, 999);
+            await Task.Delay(100);
+            
+            GameManager.Instance.AddPlayerInfo(_runner.LocalPlayer,randomName);
         }
         else
         {
@@ -86,13 +165,16 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public async void QuickJoin()
     {
-        // Oyun lobi listesine ulaşın
         if (sessionList.Count > 0)
         {
-            // Mevcut oturumlardan birine rastgele katıl
-            var randomSession = sessionList[UnityEngine.Random.Range(0, sessionList.Count)];
+            var randomSession = sessionList[Random.Range(0, sessionList.Count)];
             JoinSession(randomSession.Name);
+            
             Debug.Log("Quick joined session: " + randomSession.Name);
+            string randomName = "Player" + Random.Range(0, 999);
+            
+            await Task.Delay(100);
+            GameManager.Instance.AddPlayerInfo(_runner.LocalPlayer,randomName);
         }
         else
         {
@@ -102,17 +184,40 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public async void QuitJoin()
     {
-        // Oturumdan çıkın ve lobiye geri dönün
-        if (runner != null)
+        if (_runner != null)
         {
-            await runner.Shutdown();
-            runner = null;
+            await _runner.Shutdown();
+            _runner = null;
             CreateRunner();
+            
             LobbyUIManager.Instance.SetMenuTransitionText("Leaving Session...");
             Debug.Log("Leaving session...");
-            JoinLobby(); // Lobiye geri dön
+            
+            JoinLobby();
         }
     }
+    public void UpdatePlayerList()
+    {
+        foreach (Transform child in playerListParent.transform)
+        {
+            Destroy(child.gameObject);
+        }
+
+        var sortedPlayerInfos = GameManager.Instance.PlayerInfos
+            .OrderBy(p => p.Key.RawEncoded)
+            .ToList();
+
+        foreach (var data in sortedPlayerInfos)
+        {
+            var entry = Instantiate(playerListEntryPrefab, playerListParent.transform);
+            entry.SetPlayerData(data.Value.IsReady, data.Value.PlayerName.ToString(), data.Key);
+        }
+        Debug.Log("Update List If a Player Lefts");
+    }
+    
+    #endregion
+
+    #region Network Events
 
     public void OnSessionListUpdated(NetworkRunner runner, List<SessionInfo> updatedList)
     {
@@ -130,42 +235,29 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
             }
         }
     }
-    void HostMigrationResume(NetworkRunner runner)
-    {
-        // On host migration, we resume the session by restoring NetworkObject state
-        foreach (var resumeNO in runner.GetResumeSnapshotNetworkObjects())
-        {
-            if (resumeNO.TryGetBehaviour<NetworkTransform>(out var posRot))
-            {
-                runner.Spawn(resumeNO, onBeforeSpawned: (runner, newNO) =>
-                {
-                    // Copy state from the old NetworkObject to the new one
-                    newNO.CopyStateFrom(resumeNO);
-
-                    // Optionally, copy partial state (e.g., custom NetworkBehaviour)
-                    if (resumeNO.TryGetBehaviour<NetworkBehaviour>(out var customBehaviour))
-                    {
-                        newNO.GetComponent<NetworkBehaviour>().CopyStateFrom(customBehaviour);
-                    }
-                });
-            }
-        }
-    }
-    // --- Empty INetworkRunnerCallbacks ---
+    
     public void OnConnectedToServer(NetworkRunner runner) { }
     public void OnDisconnectedFromServer(NetworkRunner runner, NetDisconnectReason reason) { }
     public void OnDisconnectedFromServer(NetworkRunner runner) { }
     public void OnObjectExitAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
     public void OnObjectEnterAOI(NetworkRunner runner, NetworkObject obj, PlayerRef player) { }
-    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { print("Player joined"); }
-    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player) { }
+
+    public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { }
+
+    public void OnPlayerLeft(NetworkRunner runner, PlayerRef player)
+    {
+        if (player != runner.LocalPlayer)
+        {
+            GameManager.Instance.RemovePlayerInfo(player);
+            UpdatePlayerList();
+        }
+    }
     public void OnInput(NetworkRunner runner, NetworkInput input) { }
     public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
     public void OnShutdown(NetworkRunner runner, ShutdownReason reason) 
     {
         if (reason == ShutdownReason.HostMigration)
         {
-            // Handle the case where the shutdown reason is host migration
             Debug.Log("Shutdown due to Host Migration.");
         }
         else
@@ -181,21 +273,18 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
     public void OnCustomAuthenticationResponse(NetworkRunner runner, Dictionary<string, object> data) { }
     public async void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken)
     {
-        // Shutdown the old runner, as host is migrating
         await runner.Shutdown(shutdownReason: ShutdownReason.HostMigration);
-        var newRunner = Instantiate(runnerPrefab);
-        this.runner = newRunner;
-        print("Runner created +++++++++++++++++++++++++++");
-
-        // Start the new Runner using the HostMigrationToken and pass the callback to resume the session
+        var newRunner = Instantiate(_runnerPrefab);
+        
+        newRunner.ProvideInput = true;
+        newRunner.AddCallbacks(this);
+        
+        this._runner = newRunner;
         StartGameResult result = await newRunner.StartGame(new StartGameArgs()
         {
-            HostMigrationToken = hostMigrationToken,  // This is necessary to resume the session
-            HostMigrationResume = HostMigrationResume, // This callback will be used to resume the session
-            // Other args like session settings can go here
+            HostMigrationToken = hostMigrationToken, 
+            HostMigrationResume = HostMigrationResume,
         });
-
-        // Check if the new runner successfully started
         if (result.Ok)
         {
             Debug.Log("Host migration succeeded, new host started successfully.");
@@ -208,4 +297,7 @@ public class FusionLobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     public void OnReliableDataReceived(NetworkRunner runner, PlayerRef player, ReliableKey key, ArraySegment<byte> data) { }
     public void OnReliableDataProgress(NetworkRunner runner, PlayerRef player, ReliableKey key, float progress) { }
+
+    #endregion
+    
 }

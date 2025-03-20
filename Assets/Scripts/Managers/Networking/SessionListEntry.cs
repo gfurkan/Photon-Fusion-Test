@@ -4,16 +4,25 @@ using UnityEngine.UI;
 
 public class SessionListEntry : MonoBehaviour
 {
-    [SerializeField] private TMP_Text sessionNameText;
-    [SerializeField] private TMP_Text playerCountText;
-    [SerializeField] private Button joinButton;
+    #region Fields
+
+    [SerializeField] private TMP_Text _sessionNameText;
+    [SerializeField] private TMP_Text _playerCountText;
+    [SerializeField] private Button _joinButton;
+
+    #endregion
+
+    #region Public Methods
 
     public void Setup(string sessionName, int currentPlayers, int maxPlayers, System.Action onJoinClicked)
     {
-        sessionNameText.text = sessionName;
-        playerCountText.text = $"{currentPlayers}/{maxPlayers}";
+        _sessionNameText.text = sessionName;
+        _playerCountText.text = $"{currentPlayers}/{maxPlayers}";
 
-        joinButton.onClick.RemoveAllListeners();
-        joinButton.onClick.AddListener(() => onJoinClicked.Invoke());
+        _joinButton.onClick.RemoveAllListeners();
+        _joinButton.onClick.AddListener(() => onJoinClicked.Invoke());
     }
+
+    #endregion
+
 }
