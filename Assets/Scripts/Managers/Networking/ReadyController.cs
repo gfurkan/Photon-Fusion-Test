@@ -20,6 +20,7 @@ public class ReadyController : MonoBehaviour
     
     public void SetValue()
     {
+        Debug.Log("Toggle Value Changed To > " + _toggle.isOn);
         if (GameManager.Instance != null)
         {
             GameManager.Instance.ChangePlayerReadyState(_playerRef, _toggle.isOn);

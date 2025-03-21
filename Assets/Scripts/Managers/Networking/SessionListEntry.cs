@@ -21,6 +21,7 @@ public class SessionListEntry : MonoBehaviour
 
         _joinButton.onClick.RemoveAllListeners();
         _joinButton.onClick.AddListener(() => onJoinClicked.Invoke());
+        Debug.Log("Created session info UI!");
     }
 
     #endregion

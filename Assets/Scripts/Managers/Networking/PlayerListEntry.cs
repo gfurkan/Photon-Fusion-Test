@@ -29,6 +29,8 @@ public class PlayerListEntry : MonoBehaviour
         {
             _readyToggle.interactable = false;
         }
+
+        Debug.Log("Player data setted.");
     }
 
     #endregion

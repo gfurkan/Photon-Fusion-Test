@@ -1,6 +1,5 @@
 using System;
 using Fusion;
-using UnityEditor.VersionControl;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Task = System.Threading.Tasks.Task;
@@ -86,7 +85,7 @@ public class GameManager : NetworkBehaviour
 
     private async void StartGame()
     {
-        Debug.Log("Tüm oyuncular hazır, yeni sahne yükleniyor...");
+        Debug.Log("All players ready, loading gameplay scene...");
         await Task.Delay(500);
         await Runner.LoadScene(SceneRef.FromIndex(2), LoadSceneMode.Single);
     }
@@ -107,11 +106,14 @@ public class GameManager : NetworkBehaviour
                 };
                 PlayerInfos.Add(player, playerInfo);
                 RPC_NotifyPlayerAdded(player,playerInfo);
+                
+                Debug.Log("New player info added by host");
             }
         }
         else
         {
             RPC_RequestAddPlayerInfo(PlayerName);
+            Debug.Log("New player info add request sent by client");
         }
     }
     
@@ -124,11 +126,13 @@ public class GameManager : NetworkBehaviour
                 playerInfo.IsReady = isReady;
                 PlayerInfos.Set(player, playerInfo);
                 Rpc_PlayerInfoChanged(player, playerInfo);
+                Debug.Log("Player ready state info changed by host");
             }
         }
         else
         {
             Rpc_RequestChangeReadyState(isReady);
+            Debug.Log("Player ready state info change request sent by client");
         }
     }
     
@@ -137,6 +141,7 @@ public class GameManager : NetworkBehaviour
         if (Runner.IsServer && PlayerInfos.ContainsKey(player))
         {
             PlayerInfos.Remove(player);
+            Debug.Log("Player info removed > Player" + player.PlayerId);
         }
     }
     
@@ -152,6 +157,7 @@ public class GameManager : NetworkBehaviour
         {
             OnPlayerInfoChanged?.Invoke(info.Key, info.Value);
         }
+        Debug.Log("Player infos synced when the joining room");
     }
 
     #endregion

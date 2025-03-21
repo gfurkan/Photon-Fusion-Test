@@ -3572,8 +3572,8 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls:
       - m_Target: {fileID: 1738290422}
-        m_TargetAssemblyTypeName: FusionLobbyManager, Assembly-CSharp
-        m_MethodName: QuitJoin
+        m_TargetAssemblyTypeName: LobbyManager, Assembly-CSharp
+        m_MethodName: QuitRoom
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
