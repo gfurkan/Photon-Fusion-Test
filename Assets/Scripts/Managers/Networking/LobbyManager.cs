@@ -14,7 +14,7 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
     #region Fields
 
     [SerializeField] private NetworkRunner _runnerPrefab;
-    [SerializeField] private NetworkObject _gameManagerPrefab;
+    [SerializeField] private NetworkObject _lobbyConnectionManagerPrefab;
     [SerializeField] private PlayerListEntry _playerListEntryPrefab;
     [SerializeField] private Transform _playerListParent;
     [SerializeField] private GameObject _sessionEntryPrefab;
@@ -29,14 +29,14 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
     private void OnEnable()
     {
-        GameManager.OnPlayerInfoAdded += RefreshPlayerList;
-        GameManager.OnPlayerInfoChanged += RefreshPlayerList;
+        LobbyConnectionManager.OnPlayerInfoAdded += RefreshPlayerList;
+        LobbyConnectionManager.OnPlayerInfoChanged += RefreshPlayerList;
     }
 
     private void OnDisable()
     {
-        GameManager.OnPlayerInfoAdded -= RefreshPlayerList;
-        GameManager.OnPlayerInfoChanged -= RefreshPlayerList;
+        LobbyConnectionManager.OnPlayerInfoAdded -= RefreshPlayerList;
+        LobbyConnectionManager.OnPlayerInfoChanged -= RefreshPlayerList;
     }
 
     private void Start()
@@ -75,7 +75,7 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
             Destroy(child.gameObject);
         }
 
-        foreach (var data in GameManager.Instance.PlayerInfos.OrderBy(p => p.Key.RawEncoded))
+        foreach (var data in LobbyConnectionManager.Instance.PlayerInfos.OrderBy(p => p.Key.RawEncoded))
         {
             var entry = Instantiate(_playerListEntryPrefab, _playerListParent);
             entry.SetPlayerData(data.Value.IsReady, data.Value.PlayerName.ToString(), data.Key);
@@ -105,9 +105,9 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
 
             if (_runner.IsServer)
             {
-                await _runner.SpawnAsync(_gameManagerPrefab, Vector3.zero, Quaternion.identity, _runner.LocalPlayer);
+                await _runner.SpawnAsync(_lobbyConnectionManagerPrefab, Vector3.zero, Quaternion.identity, _runner.LocalPlayer);
                 string randomName = $"Player{Random.Range(0, 999)}";
-                GameManager.Instance.AddPlayerInfo(_runner.LocalPlayer, randomName);
+                LobbyConnectionManager.Instance.AddPlayerInfo(_runner.LocalPlayer, randomName);
                 Debug.Log($"Created a room and joined as host");
             }
         }
@@ -133,8 +133,8 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
             string randomName = $"Player{Random.Range(0, 999)}";
 
             Debug.Log("Joined room as client.");
-            await Task.Delay(500); // Ensure GameManager instance exists
-            GameManager.Instance.AddPlayerInfo(_runner.LocalPlayer, randomName);
+            await Task.Delay(500); // Ensure LobbyConnectionManager instance exists
+            LobbyConnectionManager.Instance.AddPlayerInfo(_runner.LocalPlayer, randomName);
         }
         else
         {
@@ -200,33 +200,20 @@ public class LobbyManager : MonoBehaviour, INetworkRunnerCallbacks
         Debug.Log("Player left room.");
         if (player != runner.LocalPlayer)
         {
-            GameManager.Instance.RemovePlayerInfo(player);
+            LobbyConnectionManager.Instance.RemovePlayerInfo(player);
             Debug.Log("The quiting player's infos are deleted.");
             RefreshPlayerList();
         }
         
     }
 
-    public async void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken)
+    public void OnHostMigration(NetworkRunner runner, HostMigrationToken hostMigrationToken)
     {
-        await runner.Shutdown(shutdownReason:ShutdownReason.HostMigration);
-
-        var newRunner = Instantiate(_runnerPrefab);
-        newRunner.ProvideInput = true;
-        newRunner.AddCallbacks(this);
-        _runner = newRunner;
-
-        var result = await newRunner.StartGame(new StartGameArgs
-        {
-            HostMigrationToken = hostMigrationToken,
-            HostMigrationResume = r => Debug.Log("Host migration resumed.")
-        });
-
-        if (!result.Ok)
-        {
-            Debug.LogWarning($"Host migration failed: {result.ShutdownReason}");
-        }
+        Debug.Log("Host migration triggered.");
+        QuitRoom();
     }
+
+
     
     public void OnSceneLoadDone(NetworkRunner runner)
     {

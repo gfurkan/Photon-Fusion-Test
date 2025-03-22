@@ -21,7 +21,7 @@ public class PlayerListEntry : MonoBehaviour
         _playerName.text = name;
         _readyController.Initialize(playerRef);
         
-        if (playerRef == GameManager.Instance.Runner.LocalPlayer)
+        if (playerRef == LobbyConnectionManager.Instance.Runner.LocalPlayer)
         {
             _readyToggle.interactable = true;
         }

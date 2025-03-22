@@ -21,13 +21,13 @@ public class ReadyController : MonoBehaviour
     public void SetValue()
     {
         Debug.Log("Toggle Value Changed To > " + _toggle.isOn);
-        if (GameManager.Instance != null)
+        if (LobbyConnectionManager.Instance != null)
         {
-            GameManager.Instance.ChangePlayerReadyState(_playerRef, _toggle.isOn);
+            LobbyConnectionManager.Instance.ChangePlayerReadyState(_playerRef, _toggle.isOn);
         }
         else
         {
-            Debug.LogError("GameManager Instance is Null");
+            Debug.LogError("Lobby Connection Manager Instance is Null");
         }
     }
     
